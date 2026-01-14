@@ -39,45 +39,46 @@ body {
 }
 
 h1, h2 {
-    margin-bottom: 2vh;
     text-align: center;
+    margin-bottom: 2vh;
 }
 
 input, textarea {
     width: 80%;
-    font-size: 2.5vh;
-    padding: 1vh;
+    font-size: 3vh;
+    padding: 1.5vh;
     margin-bottom: 2vh;
 }
 
 button {
-    font-size: 3vh;
+    font-size: 3.5vh;
     padding: 2vh 3vw;
     margin: 1vh;
+    border-radius: 12px;
+    border: none;
 }
 
 .rating-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 1vh;
+    gap: 1.5vh;
     width: 100%;
     max-width: 900px;
+    margin-bottom: 3vh;
 }
 
-.top-bar {
-    position: fixed;
-    top: env(safe-area-inset-top);
-    right: 2vw;
-    z-index: 10;
-}
-
-.close-btn {
-    background: #900;
+.rating-btn {
+    background: #333;
     color: #fff;
-    border: none;
-    font-size: 3vh;
-    padding: 1vh 2vw;
-    border-radius: 8px;
+}
+
+.rating-btn.selected {
+    background: #0a84ff;
+    font-weight: bold;
+}
+
+.nav-buttons {
+    margin-top: 2vh;
 }
 
 .hidden {
@@ -86,10 +87,6 @@ button {
 </style>
 </head>
 <body>
-
-<div class="top-bar">
-    <button class="close-btn" onclick="window.close()">✕</button>
-</div>
 
 <div id="app">
 
@@ -113,10 +110,11 @@ button {
 <div id="rate-screen" class="hidden">
     <h2 id="album-title"></h2>
     <h1 id="song-title"></h1>
+    <h2 id="current-rating">Current rating: —</h2>
 
     <div class="rating-grid" id="rating-buttons"></div>
 
-    <div>
+    <div class="nav-buttons">
         <button onclick="prevSong()">Previous</button>
         <button onclick="nextSong()">Next</button>
         <button onclick="exportCSV()">Export CSV</button>
@@ -157,26 +155,48 @@ function startRating() {
 function buildButtons() {
     const grid = document.getElementById("rating-buttons");
     grid.innerHTML = "";
+
     ratingValues.forEach(v => {
         const b = document.createElement("button");
         b.innerText = v;
-        b.onclick = () => { ratings[songList[index]] = v; };
+        b.className = "rating-btn";
+        b.onclick = () => setRating(v);
         grid.appendChild(b);
     });
 }
 
+function setRating(value) {
+    ratings[songList[index]] = value;
+    updateRatingUI();
+}
+
 function showSong() {
     document.getElementById("song-title").innerText = songList[index];
+    updateRatingUI();
+}
+
+function updateRatingUI() {
+    const current = ratings[songList[index]];
+    document.getElementById("current-rating").innerText =
+        `Current rating: ${current !== null ? current : "—"}`;
+
+    document.querySelectorAll(".rating-btn").forEach(btn => {
+        btn.classList.toggle("selected", btn.innerText == current);
+    });
 }
 
 function nextSong() {
-    if (index < songList.length - 1) index++;
-    showSong();
+    if (index < songList.length - 1) {
+        index++;
+        showSong();
+    }
 }
 
 function prevSong() {
-    if (index > 0) index--;
-    showSong();
+    if (index > 0) {
+        index--;
+        showSong();
+    }
 }
 
 function exportCSV() {
@@ -185,45 +205,28 @@ function exportCSV() {
         1: "G", 0: "H", "-1": "I", "-2": "J", "S": "K"
     };
 
-    let rows = [];
-    let row = 3;
+    let csv = [];
+    csv[0] = artist;
+    csv[1] = `${year},${album}`;
 
-    const ordered = ratingValues.slice().filter(v => v !== "S");
+    let row = 2;
+    const ordered = [6,5,4,3,2,1,0,-1,-2,"S"];
 
     ordered.forEach(r => {
         songList.forEach(s => {
             if (ratings[s] === r) {
-                rows.push({row, col: cols[r], song: s, underline: r === 6});
+                const col = cols[r];
+                csv[row] = `${",".repeat(colIndex(col))}${s}`;
                 row++;
             }
         });
     });
 
-    songList.forEach(s => {
-        if (ratings[s] === "S") {
-            rows.push({row, col: "K", song: s});
-            row++;
-        }
-    });
+    const valid = songList.map(s => ratings[s]).filter(v => typeof v === "number");
+    const total = valid.length;
+    const avg = total ? (valid.reduce((a,b)=>a+b,0) / total).toFixed(9) : "0.000000000";
 
-    let csv = [];
-    csv.push(`${artist}`);
-    csv.push(`,${album}`);
-    csv[1] = `${year},${album}`;
-
-    rows.forEach(r => {
-        csv[r.row - 1] = `${",".repeat(colIndex(r.col))}${r.song}`;
-    });
-
-    const validRatings = songList
-        .map(s => ratings[s])
-        .filter(v => typeof v === "number");
-
-    const total = validRatings.length;
-    const avg = total ? (validRatings.reduce((a,b)=>a+b,0) / total).toFixed(9) : "0.000000000";
-
-    csv.push("");
-    csv.push(`${",".repeat(11)}${total},${avg}`);
+    csv[row + 1] = `${",".repeat(11)}${total},${avg}`;
 
     download(csv.join("\n"), `${artist} - ${album}.csv`);
 }
